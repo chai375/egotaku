@@ -38,7 +38,7 @@ async def on_ready():
     print(f'ログインしました: {bot.user}')
 
 @bot.command()
-async def 記帳(ctx, amount: int):
+async def kicho(ctx, amount: int):
     user_name = ctx.author.display_name  # ユーザー名取得
 
        # ✅ Discord名とスプレッドシートの値を対応付ける辞書を追加
