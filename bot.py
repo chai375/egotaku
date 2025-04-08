@@ -94,3 +94,30 @@ async def memo(ctx, amount: int):
     await ctx.send(confirm_msg, view=view)
 
 bot.run(DISCORD_BOT_TOKEN)
+
+from flask import Flask, request
+import threading
+
+app = Flask(__name__)
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.json
+    if data and "content" in data:
+        # ここで任意のチャンネルに送信（チャンネルIDは .env から取得がオススメ）
+        channel_id = int(os.getenv("DISCORD_CHANNEL_ID"))
+        message = data["content"]
+
+        channel = bot.get_channel(channel_id)
+        if channel:
+            asyncio.run_coroutine_threadsafe(channel.send(message), bot.loop)
+        return "OK", 200
+    return "Invalid", 400
+
+def run_flask():
+    app.run(host="0.0.0.0", port=5000)
+
+if __name__ == "__main__":
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+    bot.run(DISCORD_BOT_TOKEN)
