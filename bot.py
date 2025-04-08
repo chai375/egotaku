@@ -3,6 +3,7 @@ from discord.ext import commands
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import requests
+import asyncio
 
 from dotenv import load_dotenv
 import os
