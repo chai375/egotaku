@@ -93,8 +93,6 @@ async def memo(ctx, amount: int):
     
     await ctx.send(confirm_msg, view=view)
 
-bot.run(DISCORD_BOT_TOKEN)
-
 from flask import Flask, request
 import threading
 
