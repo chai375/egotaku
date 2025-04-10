@@ -151,40 +151,25 @@ app = Flask(__name__)
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
-    print("受信データ:", data)  # ← 追加して確認！
-
     if data and "content" in data:
         channel_id = int(os.getenv("DISCORD_CHANNEL_ID"))
         message = data["content"]
         sheet_url = data.get("sheet_url")
 
-        components = []
-        if sheet_url:
-            print("シートURL:", sheet_url)  # ← これも確認用！
-            components = [{
-                "type": 1,
-                "components": [
-                    {
-                        "type": 2,
-                        "style": 5,
-                        "label": "決算を見る",
-                        "url": sheet_url
-                    }
-                ]
-            }]
+        async def send_notification():
+            channel = bot.get_channel(channel_id)
+            if not channel:
+                print("チャンネルが見つからなかったよ")
+                return
 
-        channel = bot.get_channel(channel_id)
-        if channel:
-            asyncio.run_coroutine_threadsafe(
-                channel.send(content=message, components=components), bot.loop
-            )
+            if sheet_url:
+                view = discord.ui.View()
+                view.add_item(discord.ui.Button(label="決算を見る", style=discord.ButtonStyle.link, url=sheet_url))
+                await channel.send(content=message, view=view)
+            else:
+                await channel.send(content=message)
+
+        asyncio.run_coroutine_threadsafe(send_notification(), bot.loop)
         return "OK", 200
+
     return "Invalid", 400
-
-def run_flask():
-    app.run(host="0.0.0.0", port=5000, debug=False)
-
-if __name__ == "__main__":
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.start()
-    bot.run(DISCORD_BOT_TOKEN)
