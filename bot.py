@@ -15,12 +15,12 @@ load_dotenv()
 
 # 環境変数からトークンを取得
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+SPREADSHEET_URL = os.getenv("SYSTEM_SHEET_URL")
 
 # Google Sheets APIの設定
 SCOPES = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
 CREDENTIALS_FILE = os.getenv("GOOGLE_SHEET_CREDENTIALS_PATH")
 SPREADSHEET_NAME = "清算スプシ"
-SYSTEM_SHEET_URL = os.getenv("SYSTEM_SHEET_URL")
 
 # Google Apps Script のURL
 GAS_BASE_URL = os.getenv("GAS_BASE_URL")
@@ -108,14 +108,16 @@ async def memo(ctx, amount: int):
                         await show_confirmation()
                     elif label == "記帳":
                         requests.get(CONFIRM_SCRIPT_URL)
+                        await confirm_message.edit(view=None)
                         view2 = discord.ui.View()
-                        view2.add_item(discord.ui.Button(label="記帳確認", style=discord.ButtonStyle.link, url=SYSTEM_SHEET_URL))
+                        view2.add_item(discord.ui.Button(label="記帳確認", style=discord.ButtonStyle.link, url=SPREADSHEET_URL))
                         await interaction.followup.send("記帳したよ！", view=view2)
                         return
                     elif label == "全額記帳":
                         requests.get(All_CONFIRM_SCRIPT_URL)
+                        await confirm_message.edit(view=None)
                         view2 = discord.ui.View()
-                        view2.add_item(discord.ui.Button(label="記帳確認", style=discord.ButtonStyle.link, url=SYSTEM_SHEET_URL))
+                        view2.add_item(discord.ui.Button(label="記帳確認", style=discord.ButtonStyle.link, url=SPREADSHEET_URL))
                         await interaction.followup.send("全額記帳したよ！", view=view2)
                         return
                 return callback
@@ -123,7 +125,7 @@ async def memo(ctx, amount: int):
             button.callback = await make_callback(label)
             view.add_item(button)
 
-        await ctx.send(confirm_msg, view=view)
+        confirm_message = await ctx.send(confirm_msg, view=view)
 
     await show_confirmation()
 
