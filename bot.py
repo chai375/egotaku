@@ -49,9 +49,8 @@ async def memo(ctx, amount: int):
    }
     
     sheet_name = name_mapping.get(user_name, user_name)  # 変換後の名前を取得
-    sheet.update('B5', [[sheet_name]]) 
-
-    sheet.update('C5', [[amount]])
+    await asyncio.to_thread(sheet.update, 'B5', [[sheet_name]])
+    await asyncio.to_thread(sheet.update, 'C5', [[amount]])
     
     await ctx.send(f"{user_name} さん、どのような用途で使用しましたか？")
     
@@ -62,11 +61,11 @@ async def memo(ctx, amount: int):
 
     # ✅ 用途入力後のキャンセル処理
     if response.content.strip() == "キャンセル":
-           sheet.batch_clear(['A5:E5'])
+           await asyncio.to_thread(sheet.batch_clear, ['A5:E5'])
            await ctx.send("入力をキャンセルしたよ！")        
            return
     
-    sheet.update('D5', [[response.content]])  
+    await asyncio.to_thread(sheet.update, 'D5', [[response.content]])
     
     confirm_msg = f"確認してください！\n名前: {sheet_name}\n金額: {amount}\n内容: {response.content}"
     view = discord.ui.View()
@@ -105,7 +104,7 @@ async def memo(ctx, amount: int):
     try:
         msg = await bot.wait_for('message', timeout=60.0, check=check)
         if msg.content.strip() == "キャンセル":
-            sheet.batch_clear(['A5:E5'])
+            await asyncio.to_thread(sheet.batch_clear, ['A5:E5'])
             await ctx.send("入力をキャンセルしたよ！")
             return
     except asyncio.TimeoutError:
