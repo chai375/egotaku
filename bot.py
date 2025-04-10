@@ -52,7 +52,7 @@ async def memo(ctx, amount: int):
     await asyncio.get_running_loop().run_in_executor(None, sheet.update, 'B5', [[sheet_name]])
     await asyncio.get_running_loop().run_in_executor(None, sheet.update, 'C5', [[amount]])
     
-    await ctx.send(f"{user_name} さん、どのような用途で使用しましたか？")
+    await ctx.send(f"{user_name} さん、どんな用途で使用したの？")
     
     def check(msg):
         return msg.author == ctx.author and msg.channel == ctx.channel
@@ -71,7 +71,7 @@ async def memo(ctx, amount: int):
         b5 = sheet.acell("B5").value
         c5 = sheet.acell("C5").value
         d5 = sheet.acell("D5").value
-        confirm_msg = f"確認してください！\n名前: {b5}\n金額: {c5}\n内容: {d5}"
+        confirm_msg = f"確認してね！\n名前: {b5}\n金額: {c5}\n内容: {d5}"
         view = discord.ui.View()
         button_labels = ["金額修正", "内容修正", "記帳", "全額記帳"]
         for label in button_labels:
@@ -108,11 +108,11 @@ async def memo(ctx, amount: int):
 
                     elif label == "記帳":
                         requests.get(CONFIRM_SCRIPT_URL)
-                        await interaction.followup.send("記帳しました！")
+                        await interaction.followup.send("記帳したよ！")
                         return
                     elif label == "全額記帳":
                         requests.get(All_CONFIRM_SCRIPT_URL)
-                        await interaction.followup.send("全額記帳しました！")
+                        await interaction.followup.send("全額記帳したよ！")
                         return
                 return callback
 
