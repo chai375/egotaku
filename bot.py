@@ -59,6 +59,13 @@ async def memo(ctx, amount: int):
         return msg.author == ctx.author and msg.channel == ctx.channel
     
     response = await bot.wait_for('message', check=check)
+
+    # ✅ 用途入力後のキャンセル処理
+    if response.content.strip() == "キャンセル":
+           sheet.batch_clear(['A5:E5'])
+           await ctx.send("入力をキャンセルしたよ！")        
+           return
+    
     sheet.update('D5', [[response.content]])  
     
     confirm_msg = f"確認してください！\n名前: {sheet_name}\n金額: {amount}\n内容: {response.content}"
@@ -93,6 +100,16 @@ async def memo(ctx, amount: int):
     view.add_item(button2)
     
     await ctx.send(confirm_msg, view=view)
+
+    # ✅ 「確認してください」のあとにキャンセルしたい場合も対応！
+    try:
+        msg = await bot.wait_for('message', timeout=60.0, check=check)
+        if msg.content.strip() == "キャンセル":
+            sheet.batch_clear(['A5:E5'])
+            await ctx.send("入力をキャンセルしたよ！")
+            return
+    except asyncio.TimeoutError:
+        pass
 
 from flask import Flask, request
 import threading
