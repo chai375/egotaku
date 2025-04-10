@@ -9,6 +9,8 @@ from flask import Flask, request
 import threading
 from dotenv import load_dotenv
 import os
+from datetime import datetime
+import uuid  # ←追加
 
 # .envファイルをロード
 load_dotenv()
@@ -43,6 +45,8 @@ async def on_ready():
 
 @bot.command()
 async def memo(ctx, amount: int):
+    confirm_message = None
+
     user_name = ctx.author.display_name
     name_mapping = {
         "ちょい": "ちゃい",
@@ -67,6 +71,8 @@ async def memo(ctx, amount: int):
     await asyncio.get_running_loop().run_in_executor(None, sheet.update, 'D5', [[response.content]])
 
     async def show_confirmation():
+        nonlocal confirm_message
+
         b5 = sheet.acell("B5").value
         c5 = int(sheet.acell("C5").value)
         d5 = sheet.acell("D5").value
@@ -106,19 +112,31 @@ async def memo(ctx, amount: int):
                             return
                         await asyncio.get_running_loop().run_in_executor(None, sheet.update, 'D5', [[new_msg.content]])
                         await show_confirmation()
-                    elif label == "記帳":
-                        requests.get(CONFIRM_SCRIPT_URL)
-                        await confirm_message.edit(view=None)
+                    elif label in ["記帳", "全額記帳"]:
+                        unique_id = f"ID-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+                        await asyncio.get_running_loop().run_in_executor(None, sheet.update, 'E5', [[unique_id]])
+                        if label == "記帳":
+                            requests.get(CONFIRM_SCRIPT_URL)
+                        else:
+                            requests.get(All_CONFIRM_SCRIPT_URL)
+                        await interaction.message.edit(view=None)
                         view2 = discord.ui.View()
                         view2.add_item(discord.ui.Button(label="記帳確認", style=discord.ButtonStyle.link, url=SPREADSHEET_URL))
-                        await interaction.followup.send("記帳したよ！", view=view2)
-                        return
-                    elif label == "全額記帳":
-                        requests.get(All_CONFIRM_SCRIPT_URL)
-                        await confirm_message.edit(view=None)
-                        view2 = discord.ui.View()
-                        view2.add_item(discord.ui.Button(label="記帳確認", style=discord.ButtonStyle.link, url=SPREADSHEET_URL))
-                        await interaction.followup.send("全額記帳したよ！", view=view2)
+
+                        delete_button = discord.ui.Button(label="記帳削除", style=discord.ButtonStyle.danger)
+                        async def delete_callback(interaction):
+                            all_rows = sheet.get_all_values()
+                            print(f"🟡 target_id: {unique_id}")
+                            for idx, row in enumerate(all_rows[8:], start=9):
+                                print(f"🔍 row {idx}: {row}")
+                                if len(row) >= 5 and row[4] and row[4].split("（")[0] == unique_id:
+                                    sheet.delete_rows(idx)
+                                    await interaction.response.send_message("記帳を削除したよ！")
+                                    return
+                            await interaction.response.send_message("該当する記帳が見つからなかったよ！")
+                        delete_button.callback = delete_callback
+                        view2.add_item(delete_button)
+                        await interaction.followup.send(f"{label}したよ！", view=view2)
                         return
                 return callback
 
