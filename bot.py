@@ -62,43 +62,66 @@ async def memo(ctx, amount: int):
     # ✅ 用途入力後のキャンセル処理
     if response.content.strip() == "キャンセル":
            await asyncio.get_running_loop().run_in_executor(None, sheet.batch_clear, ['A5:E5'])
-           await ctx.send("入力をキャンセルしたよ！")        
+           await ctx.send("入力をキャンセルしたよ！")
            return
     
     await asyncio.get_running_loop().run_in_executor(None, sheet.update, 'D5', [[response.content]])
-    
-    confirm_msg = f"確認してください！\n名前: {sheet_name}\n金額: {amount}\n内容: {response.content}"
-    view = discord.ui.View()
-    
-    button1 = discord.ui.Button(label="記帳", style=discord.ButtonStyle.primary)
-    async def button1_callback(interaction):
-        try:
 
-            # まずインタラクションを遅延応答
-            await interaction.response.defer()
+    async def show_confirmation():
+        b5 = sheet.acell("B5").value
+        c5 = sheet.acell("C5").value
+        d5 = sheet.acell("D5").value
+        confirm_msg = f"確認してください！\n名前: {b5}\n金額: {c5}\n内容: {d5}"
+        view = discord.ui.View()
+        button_labels = ["金額修正", "内容修正", "記帳", "全額記帳"]
+        for label in button_labels:
+            style = discord.ButtonStyle.secondary
+            if label == "記帳":
+                style = discord.ButtonStyle.primary
+            elif label == "全額記帳":
+                style = discord.ButtonStyle.danger
 
-            requests.get(CONFIRM_SCRIPT_URL)
-            await interaction.followup.send("記帳しました！")
-        except discord.errors.NotFound as e:
-            await interaction.channel.send("インタラクションが期限切れです。もう一度試してください。")
-    button1.callback = button1_callback
-    
-    button2 = discord.ui.Button(label="全額記帳", style=discord.ButtonStyle.danger)
-    async def button2_callback(interaction):
-        try:
-             # まずインタラクションを遅延応答
-            await interaction.response.defer()
+            button = discord.ui.Button(label=label, style=style)
 
-            requests.get(All_CONFIRM_SCRIPT_URL)
-            await interaction.followup.send("全額記帳しました！")
-        except discord.errors.NotFound:
-            await interaction.channel.send("インタラクションが期限切れです。もう一度試してください。")
-    button2.callback = button2_callback
-    
-    view.add_item(button1)
-    view.add_item(button2)
-    
-    await ctx.send(confirm_msg, view=view)
+            async def make_callback(label):
+                async def callback(interaction):
+                    await interaction.response.defer()
+                    if label == "金額修正":
+                        await interaction.followup.send("新しい金額を入力してね！")
+                        new_msg = await bot.wait_for("message", check=check)
+                        if new_msg.content.strip() == "キャンセル":
+                            await asyncio.get_running_loop().run_in_executor(None, sheet.batch_clear, ['A5:E5'])
+                            await interaction.followup.send("入力をキャンセルしたよ！")
+                            return
+                        await asyncio.get_running_loop().run_in_executor(None, sheet.update, 'C5', [[new_msg.content]])
+                        await show_confirmation()
+
+                    elif label == "内容修正":
+                        await interaction.followup.send("新しい内容を入力してね！")
+                        new_msg = await bot.wait_for("message", check=check)
+                        if new_msg.content.strip() == "キャンセル":
+                            await asyncio.get_running_loop().run_in_executor(None, sheet.batch_clear, ['A5:E5'])
+                            await interaction.followup.send("入力をキャンセルしたよ！")
+                            return
+                        await asyncio.get_running_loop().run_in_executor(None, sheet.update, 'D5', [[new_msg.content]])
+                        await show_confirmation()
+
+                    elif label == "記帳":
+                        requests.get(CONFIRM_SCRIPT_URL)
+                        await interaction.followup.send("記帳しました！")
+                        return
+                    elif label == "全額記帳":
+                        requests.get(All_CONFIRM_SCRIPT_URL)
+                        await interaction.followup.send("全額記帳しました！")
+                        return
+                return callback
+
+            button.callback = await make_callback(label)
+            view.add_item(button)
+
+        await ctx.send(confirm_msg, view=view)
+
+    await show_confirmation()
 
     # ✅ 「確認してください」のあとにキャンセルしたい場合も対応！
     try:
