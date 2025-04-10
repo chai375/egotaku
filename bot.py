@@ -173,3 +173,11 @@ def webhook():
         return "OK", 200
 
     return "Invalid", 400
+
+def run_flask():
+    app.run(host="0.0.0.0", port=5000, debug=False)
+
+if __name__ == "__main__":
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+    bot.run(DISCORD_BOT_TOKEN)
