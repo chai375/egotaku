@@ -4,6 +4,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import requests
 import asyncio
+import re
 
 from dotenv import load_dotenv
 import os
@@ -132,6 +133,21 @@ async def memo(ctx, amount: int):
             return
     except asyncio.TimeoutError:
         pass
+
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+
+    if bot.user in message.mentions:
+        content = message.content.replace(f"<@{bot.user.id}>", "").strip()
+        match = re.match(r"^\d{1,10}$", content)  # 金額の数字のみ
+        if match:
+            ctx = await bot.get_context(message)
+            await memo(ctx, int(content))
+            return
+
+    await bot.process_commands(message)
 
 from flask import Flask, request
 import threading
