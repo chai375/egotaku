@@ -125,18 +125,41 @@ async def memo(ctx, amount: int):
 
                         delete_button = discord.ui.Button(label="記帳削除", style=discord.ButtonStyle.danger)
                         async def delete_callback(interaction):
-                            all_rows = sheet.get_all_values()
-                            print(f"🟡 target_id: {unique_id}")
-                            for idx, row in enumerate(all_rows[8:], start=9):
-                                print(f"🔍 row {idx}: {row}")
-                                if len(row) >= 5 and row[4] and row[4].split("（")[0] == unique_id:
-                                    sheet.delete_rows(idx)
-                                    await interaction.response.send_message("記帳を削除したよ！")
-                                    return
-                            await interaction.response.send_message("該当する記帳が見つからなかったよ！")
+                             try:
+                                 target_id = sheet.acell("E5").value
+                                 all_rows = sheet.get_all_values()
+                                 for idx, row in enumerate(all_rows[8:], start=9):
+                                     if len(row) >= 5 and target_id in row[4]:
+                                         sheet.delete_rows(idx)
+                                         await interaction.response.send_message("記帳を削除したよ！")
+                                         return
+                                 await interaction.response.send_message("該当する記帳が見つからなかったよ！")
+                             except discord.errors.InteractionResponded:
+                                  message_content = interaction.message.content
+                                  match = re.search(r"ID: (ID-[\d\-a-z]+)", message_content)
+                                  if match:
+                                     old_id = match.group(1)
+                                     view3 = discord.ui.View()
+                                     new_delete_button = discord.ui.Button(label="再削除ボタン", style=discord.ButtonStyle.danger)
+
+                                     async def new_delete_callback(new_interaction):
+                                         all_rows = sheet.get_all_values()
+                                         for idx, row in enumerate(all_rows[8:], start=9):
+                                             if len(row) >= 5 and old_id in row[4]:
+                                                 sheet.delete_rows(idx)
+                                                 await new_interaction.response.send_message("記帳を削除したよ！（再ボタン）")
+                                                 return
+                                         await new_interaction.response.send_message("該当する記帳が見つからなかったよ！（再ボタン）")
+
+                                     new_delete_button.callback = new_delete_callback
+                                     view3.add_item(new_delete_button)
+
+                                     await interaction.channel.send("この削除ボタンは期限切れだよ！\n下の新しいボタンを使ってね👇", view=view3)
+                                 else:
+                                     await interaction.channel.send("削除対象のIDが見つからなかったよ！")
                         delete_button.callback = delete_callback
                         view2.add_item(delete_button)
-                        await interaction.followup.send(f"{label}したよ！", view=view2)
+                        await interaction.followup.send(f"{label}したよ！\nID: {unique_id}", view=view2)
                         return
                 return callback
 
