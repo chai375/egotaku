@@ -10,12 +10,13 @@ import threading
 from dotenv import load_dotenv
 import os
 from datetime import datetime
-import uuid  # ←追加
+import uuid
 
 # .envファイルをロード
 load_dotenv()
-
-# 環境変数からトークンを取得
+GAS_BASE_URL = os.getenv("GAS_BASE_URL")
+CONFIRM_SCRIPT_URL = GAS_BASE_URL + "?action=confirm"
+All_CONFIRM_SCRIPT_URL = GAS_BASE_URL + "?action=all_confirm"
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 SPREADSHEET_URL = os.getenv("SYSTEM_SHEET_URL")
 
@@ -24,17 +25,10 @@ SCOPES = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/a
 CREDENTIALS_FILE = os.getenv("GOOGLE_SHEET_CREDENTIALS_PATH")
 SPREADSHEET_NAME = "清算スプシ"
 
-# Google Apps Script のURL
-GAS_BASE_URL = os.getenv("GAS_BASE_URL")
-CONFIRM_SCRIPT_URL = GAS_BASE_URL + "?action=confirm"
-All_CONFIRM_SCRIPT_URL = GAS_BASE_URL + "?action=all_confirm"
-
-# Google Sheetsへの接続
 credentials = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, SCOPES)
 gc = gspread.authorize(credentials)
 sheet = gc.open(SPREADSHEET_NAME).sheet1
 
-# Discord Botの設定
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -46,16 +40,11 @@ async def on_ready():
 @bot.command()
 async def memo(ctx, amount: int):
     confirm_message = None
-
     user_name = ctx.author.display_name
-    name_mapping = {
-        "ちょい": "ちゃい",
-        "こしたみん": "こし"
-    }
+    name_mapping = {"ちょい": "ちゃい", "こしたみん": "こし"}
     sheet_name = name_mapping.get(user_name, user_name)
     await asyncio.get_running_loop().run_in_executor(None, sheet.update, 'B5', [[sheet_name]])
     await asyncio.get_running_loop().run_in_executor(None, sheet.update, 'C5', [[amount]])
-
     await ctx.send(f"{user_name} さん、どんな用途で使用したの？")
 
     def check(msg):
@@ -120,23 +109,45 @@ async def memo(ctx, amount: int):
                         else:
                             requests.get(All_CONFIRM_SCRIPT_URL)
                         await interaction.message.edit(view=None)
+
                         view2 = discord.ui.View()
                         view2.add_item(discord.ui.Button(label="記帳確認", style=discord.ButtonStyle.link, url=SPREADSHEET_URL))
 
-                        delete_button = discord.ui.Button(label="記帳削除", style=discord.ButtonStyle.danger)
+                        delete_button = discord.ui.Button(label="記帳削除", style=discord.ButtonStyle.danger, custom_id="delete_button")
+
                         async def delete_callback(interaction):
-                            all_rows = sheet.get_all_values()
-                            print(f"🟡 target_id: {unique_id}")
-                            for idx, row in enumerate(all_rows[8:], start=9):
-                                print(f"🔍 row {idx}: {row}")
-                                if len(row) >= 5 and row[4] and row[4].split("（")[0] == unique_id:
-                                    sheet.delete_rows(idx)
-                                    await interaction.response.send_message("記帳を削除したよ！")
-                                    return
-                            await interaction.response.send_message("該当する記帳が見つからなかったよ！")
+                            try:
+                                target_id = sheet.acell("E5").value
+                                all_rows = sheet.get_all_values()
+                                for idx, row in enumerate(all_rows[8:], start=9):
+                                    if len(row) >= 5 and row[4] and row[4].split("（")[0] == unique_id:
+                                        sheet.delete_rows(idx)
+                                        await interaction.response.send_message("記帳を削除したよ！")
+                                        return
+                                await interaction.response.send_message("削除対象のIDが見つからなかったよ！")
+                            except discord.errors.InteractionResponded:
+                                view_retry = discord.ui.View()
+                                new_delete_button = discord.ui.Button(label="記帳削除（再試行）", style=discord.ButtonStyle.danger, custom_id="retry_delete_button")
+
+                                async def retry_delete_callback(new_interaction):
+                                    target_id = sheet.acell("E5").value
+                                    all_rows = sheet.get_all_values()
+                                    for idx, row in enumerate(all_rows[8:], start=9):
+                                        if len(row) >= 5 and row[4] and row[4].split("（")[0] == unique_id:
+                                            sheet.delete_rows(idx)
+                                            await new_interaction.response.send_message("記帳を削除したよ！（再試行）")
+                                            return
+                                    await new_interaction.response.send_message("削除対象の記帳が見つからなかったよ！（再試行）")
+
+                                new_delete_button.callback = retry_delete_callback
+                                view_retry.add_item(new_delete_button)
+
+                                await interaction.channel.send("❗このボタンは期限切れだよ！新しいボタンを押してね！", view=view_retry)
+
                         delete_button.callback = delete_callback
                         view2.add_item(delete_button)
-                        await interaction.followup.send(f"{label}したよ！", view=view2)
+
+                        await interaction.followup.send(f"{label}したよ！\n🆔 {unique_id}", view=view2)
                         return
                 return callback
 
@@ -160,6 +171,33 @@ async def memo(ctx, amount: int):
 async def on_message(message):
     if message.author == bot.user:
         return
+
+    if message.reference:
+        original = await message.channel.fetch_message(message.reference.message_id)
+
+        # 「@ボット 削除」または「@ボット del」に対応
+        if bot.user in message.mentions and any(cmd in message.content for cmd in ["削除", "del"]):
+            # オリジナルメッセージの中からIDを取得
+            lines = original.content.splitlines()
+            target_id = None
+            for line in lines:
+                if line.startswith("🆔"):
+                    target_id = line.replace("🆔", "").strip()
+                    break
+
+            if not target_id:
+                await message.reply("IDが見つからなかったよ…！")
+                return
+
+            # シートを確認して削除
+            all_rows = sheet.get_all_values()
+            for idx, row in enumerate(all_rows[8:], start=9):
+                if len(row) >= 5 and row[4] and row[4].split("（")[0] == target_id:
+                    sheet.delete_rows(idx)
+                    await message.reply("記帳を削除したよ！")
+                    return
+
+            await message.reply("該当する記帳が見つからなかったよ！")
 
     if bot.user in message.mentions:
         content = message.content.replace(f"<@{bot.user.id}>", "").strip()
